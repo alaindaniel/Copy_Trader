@@ -181,8 +181,14 @@ API.subscribe_live_deal(tipo, config['paridade'], timeframe, 10)
 while True:
 	trades = API.get_live_deal(tipo, config['paridade'], timeframe)
 	
-	if len(trades) > 0 and old != trades[0]['user_id'] and trades[0]['amount_enrolled'] >= float(config['valor_minimo']) and ( int(str(timestamp_converter(time.time(), 2) - timestamp_converter(trades[0]['created_at'] / 1000, 2)).replace(':', '')) <= int(config['filtro_diferenca_sinal']) ):
+	if len(trades) > 0 and old != trades[0]['user_id'] and trades[0]['amount_enrolled'] >= float(config['valor_minimo']):
 		ok = True
+		
+		# Correcao de bug em relacao ao retorno de datas erradas
+		res = str(timestamp_converter(trades[0]['created_at'] / 1000, 2) - timestamp_converter(time.time(), 2) ).replace(':', '')
+		if 'day' in res:
+			res = str(timestamp_converter(time.time(), 2) - timestamp_converter(trades[0]['created_at'] / 1000, 2)).replace(':', '')
+		ok = True if int(res) <= int(config['filtro_diferenca_sinal']) else False
 		
 		if len(filtro_top_traders) > 0:
 			if trades[0]['user_id'] not in filtro_top_traders:
