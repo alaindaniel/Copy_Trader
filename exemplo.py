@@ -2,7 +2,7 @@ from iqoptionapi.stable_api import IQ_Option
 import time, json, logging, configparser
 from datetime import datetime, date, timedelta
 from dateutil import tz
-
+import sys
 
 logging.disable(level=(logging.DEBUG))
 
@@ -44,11 +44,11 @@ def perfil():
 		balance		
 	'''
 
-def timestamp_converter(x):
+def timestamp_converter(x, retorno = 1):
 	hora = datetime.strptime(datetime.utcfromtimestamp(x).strftime('%Y-%m-%d %H:%M:%S'), '%Y-%m-%d %H:%M:%S')
 	hora = hora.replace(tzinfo=tz.gettz('GMT'))
 	
-	return str(hora.astimezone(tz.gettz('America/Sao Paulo')))[:-6]
+	return str(hora.astimezone(tz.gettz('America/Sao Paulo')))[:-6] if retorno == 1 else hora.astimezone(tz.gettz('America/Sao Paulo'))
 
 def banca():
 	return API.get_balance()
@@ -74,7 +74,7 @@ def configuracao():
 	arquivo = configparser.RawConfigParser()
 	arquivo.read('config.txt')	
 		
-	return {'martingale': arquivo.get('GERAL', 'martingale'), 'sorosgale': arquivo.get('GERAL', 'sorosgale'), 'niveis': arquivo.get('GERAL', 'niveis'), 'filtro_pais': arquivo.get('GERAL', 'filtro_pais'), 'filtro_top_traders': arquivo.get('GERAL', 'filtro_top_traders'), 'valor_minimo': arquivo.get('GERAL', 'valor_minimo'), 'paridade': arquivo.get('GERAL', 'paridade'), 'valor_entrada': arquivo.get('GERAL', 'valor_entrada'), 'timeframe': arquivo.get('GERAL', 'timeframe')}
+	return {'stop_win': arquivo.get('GERAL', 'stop_win'), 'stop_loss': arquivo.get('GERAL', 'stop_loss'), 'payout': 0, 'banca_inicial': banca(), 'filtro_diferenca_sinal': arquivo.get('GERAL', 'filtro_diferenca_sinal'), 'martingale': arquivo.get('GERAL', 'martingale'), 'sorosgale': arquivo.get('GERAL', 'sorosgale'), 'niveis': arquivo.get('GERAL', 'niveis'), 'filtro_pais': arquivo.get('GERAL', 'filtro_pais'), 'filtro_top_traders': arquivo.get('GERAL', 'filtro_top_traders'), 'valor_minimo': arquivo.get('GERAL', 'valor_minimo'), 'paridade': arquivo.get('GERAL', 'paridade'), 'valor_entrada': arquivo.get('GERAL', 'valor_entrada'), 'timeframe': arquivo.get('GERAL', 'timeframe')}
 
 def martingale(tipo, valor, payout):
 	if tipo == 'simples':
@@ -88,30 +88,47 @@ def martingale(tipo, valor, payout):
 				return round(valor, 2)
 				break
 			valor += 0.01
-	
-def entradas(par, entrada, direcao, timeframe):
-	status,id = API.buy_digital_spot(par, entrada, direcao, timeframe)
+	 
+def entradas(config, entrada, direcao, timeframe):
+	status,id = API.buy_digital_spot(config['paridade'], entrada, direcao, timeframe)
 
 	if status:
+		# STOP WIN/STOP LOSS
+		banca_att = banca()
+		stop_loss = False
+		stop_win = False
+
+		if round((banca_att - float(config['banca_inicial'])), 2) <= (abs(float(config['stop_loss'])) * -1.0):
+			print('stop loss = ',round((banca_att - float(config['banca_inicial'])), 2))
+			stop_loss = True
+			
+		if round((banca_att - float(config['banca_inicial'])) + (float(entrada) * float(config['payout'])) + float(entrada), 2) >= abs(float(config['stop_win'])):
+			print('stop win = ',round((banca_att - float(config['banca_inicial'])) + (float(entrada) * float(config['payout'])) + float(entrada), 2))
+			stop_win = True
+		
 		while True:
 			status,lucro = API.check_win_digital_v2(id)
 			
 			if status:
-				if lucro > 0:
-					return 'win',round(lucro, 2)
-				else:
-					return 'loss',0
+				if lucro > 0:		
+					return 'win',round(lucro, 2),stop_win
+				else:				
+					return 'loss',0,stop_loss
 				break
+		
+		
 	else:
 		return 'error',0
 
 # Carrega as configuracoes
 config = configuracao()
+config['banca_inicial'] = banca()
+
 
 # Filtros
-# 1º Filtro por valor da entrada copiada
-# 2º Filtro para copiar entrada dos top X 
-# 3º Filtro Pais
+# 1? Filtro por valor da entrada copiada
+# 2? Filtro para copiar entrada dos top X 
+# 3? Filtro Pais
 
 # Captura os dados necessarios do ranking
 def filtro_ranking(config):
@@ -157,14 +174,14 @@ timeframe = 'PT'+config['timeframe']+'M' # PT5M / PT15M
 old = 0
 
 # Captura o Payout
-py = float(payout(config['paridade'], 'digital', int(config['timeframe'])) / 100)
+config['payout'] = float(payout(config['paridade'], 'digital', int(config['timeframe'])) / 100)
 
 API.subscribe_live_deal(tipo, config['paridade'], timeframe, 10)
 
 while True:
 	trades = API.get_live_deal(tipo, config['paridade'], timeframe)
 	
-	if len(trades) > 0 and old != trades[0]['user_id'] and trades[0]['amount_enrolled'] >= float(config['valor_minimo']):
+	if len(trades) > 0 and old != trades[0]['user_id'] and trades[0]['amount_enrolled'] >= float(config['valor_minimo']) and ( int(str(timestamp_converter(time.time(), 2) - timestamp_converter(trades[0]['created_at'] / 1000, 2)).replace(':', '')) <= int(config['filtro_diferenca_sinal']) ):
 		ok = True
 		
 		if len(filtro_top_traders) > 0:
@@ -173,13 +190,18 @@ while True:
 		
 		if ok:
 			# Dados sinal
+			print((timestamp_converter(time.time(), 2) - timestamp_converter(trades[0]['created_at'] / 1000, 2)), end='')
 			print(' [',trades[0]['flag'],']',config['paridade'],'/',trades[0]['amount_enrolled'],'/',trades[0]['instrument_dir'],'/',trades[0]['name'])
 			
 			
 			# 1 entrada
-			resultado,lucro = entradas(config['paridade'], config['valor_entrada'], trades[0]['instrument_dir'], 1)
+			resultado,lucro,stop = entradas(config, config['valor_entrada'], trades[0]['instrument_dir'], 1)
 			print('   -> ',resultado,'/',lucro,'\n\n')
-			
+
+			if stop:
+				print('\n\nStop',resultado.upper(),'batido!')
+				sys.exit()
+		
 			
 			# Martingale
 			if resultado == 'loss' and config['martingale'] == 'S':
@@ -187,8 +209,11 @@ while True:
 				for i in range(int(config['niveis']) if int(config['niveis']) > 0 else 1):
 					
 					print('   MARTINGALE NIVEL '+str(i+1)+'..', end='')
-					resultado,lucro = entradas(config['paridade'], valor_entrada, trades[0]['instrument_dir'], 1)
+					resultado,lucro,stop = entradas(config, valor_entrada, trades[0]['instrument_dir'], 1)
 					print(' ',resultado,'/',lucro,'\n')
+					if stop:
+						print('\n\nStop',resultado.upper(),'batido!')
+						sys.exit()
 					
 					if resultado == 'win':
 						print('\n')
@@ -215,9 +240,11 @@ while True:
 							print('   SOROSGALE NIVEL '+str(i+1)+' | MAO '+str(i2+1)+' | ', end='')
 							
 							# Entrada
-							resultado,lucro = entradas(config['paridade'], (perca / 2)+lucro, trades[0]['instrument_dir'], int(config['timeframe']))
-							
+							resultado,lucro,stop = entradas(config, (perca / 2)+lucro, trades[0]['instrument_dir'], int(config['timeframe']))							
 							print(resultado,'/',lucro,'\n')	
+							if stop:
+								print('\n\nStop',resultado.upper(),'batido!')
+								sys.exit()
 							
 							if resultado == 'win':			
 								lucro_total += lucro
