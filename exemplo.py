@@ -197,7 +197,7 @@ while True:
 		
 		if ok:
 			# Dados sinal
-			print((timestamp_converter(time.time(), 2) - timestamp_converter(trades[0]['created_at'] / 1000, 2)), end='')
+			print(res, end='')
 			print(' [',trades[0]['flag'],']',config['paridade'],'/',trades[0]['amount_enrolled'],'/',trades[0]['instrument_dir'],'/',trades[0]['name'])
 			
 			
