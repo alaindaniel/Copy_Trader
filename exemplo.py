@@ -118,7 +118,7 @@ def entradas(config, entrada, direcao, timeframe):
 		
 		
 	else:
-		return 'error',0
+		return 'error',0,False
 
 # Carrega as configuracoes
 config = configuracao()
