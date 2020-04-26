@@ -184,11 +184,12 @@ while True:
 	if len(trades) > 0 and old != trades[0]['user_id'] and trades[0]['amount_enrolled'] >= float(config['valor_minimo']):
 		ok = True
 		
-		# Correcao de bug em relacao ao retorno de datas erradas
+		# Correcao de bug em relacao ao retorno de datas errado
 		res = str(timestamp_converter(trades[0]['created_at'] / 1000, 2) - timestamp_converter(time.time(), 2) ).replace(':', '')
 		if 'day' in res:
 			res = str(timestamp_converter(time.time(), 2) - timestamp_converter(trades[0]['created_at'] / 1000, 2)).replace(':', '')
 		ok = True if int(res) <= int(config['filtro_diferenca_sinal']) else False
+	
 		
 		if len(filtro_top_traders) > 0:
 			if trades[0]['user_id'] not in filtro_top_traders:
@@ -211,7 +212,7 @@ while True:
 			
 			# Martingale
 			if resultado == 'loss' and config['martingale'] == 'S':
-				valor_entrada = martingale('auto', float(config['valor_entrada']), float(py))
+				valor_entrada = martingale('auto', float(config['valor_entrada']), float(config['payout']))
 				for i in range(int(config['niveis']) if int(config['niveis']) > 0 else 1):
 					
 					print('   MARTINGALE NIVEL '+str(i+1)+'..', end='')
@@ -225,7 +226,7 @@ while True:
 						print('\n')
 						break
 					else:
-						valor_entrada = martingale('auto', float(config['valor_entrada']), float(py))
+						valor_entrada = martingale('auto', float(config['valor_entrada']), float(config['payout']))
 						
 			elif resultado == 'loss' and config['sorosgale'] == 'S': # SorosGale
 				
