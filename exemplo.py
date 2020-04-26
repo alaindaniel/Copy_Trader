@@ -226,7 +226,7 @@ while True:
 						print('\n')
 						break
 					else:
-						valor_entrada = martingale('auto', float(config['valor_entrada']), float(config['payout']))
+						valor_entrada = martingale('auto', float(valor_entrada), float(config['payout']))
 						
 			elif resultado == 'loss' and config['sorosgale'] == 'S': # SorosGale
 				
