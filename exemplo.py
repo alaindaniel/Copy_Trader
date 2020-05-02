@@ -202,7 +202,7 @@ while True:
 			
 			
 			# 1 entrada
-			resultado,lucro,stop = entradas(config, config['valor_entrada'], trades[0]['instrument_dir'], 1)
+			resultado,lucro,stop = entradas(config, config['valor_entrada'], trades[0]['instrument_dir'], int(config['timeframe']))
 			print('   -> ',resultado,'/',lucro,'\n\n')
 
 			if stop:
@@ -216,7 +216,7 @@ while True:
 				for i in range(int(config['niveis']) if int(config['niveis']) > 0 else 1):
 					
 					print('   MARTINGALE NIVEL '+str(i+1)+'..', end='')
-					resultado,lucro,stop = entradas(config, valor_entrada, trades[0]['instrument_dir'], 1)
+					resultado,lucro,stop = entradas(config, valor_entrada, trades[0]['instrument_dir'], int(config['timeframe']))
 					print(' ',resultado,'/',lucro,'\n')
 					if stop:
 						print('\n\nStop',resultado.upper(),'batido!')
