@@ -74,7 +74,7 @@ def configuracao():
 	arquivo = configparser.RawConfigParser()
 	arquivo.read('config.txt')	
 		
-	return {'stop_win': arquivo.get('GERAL', 'stop_win'), 'stop_loss': arquivo.get('GERAL', 'stop_loss'), 'payout': 0, 'banca_inicial': banca(), 'filtro_diferenca_sinal': arquivo.get('GERAL', 'filtro_diferenca_sinal'), 'martingale': arquivo.get('GERAL', 'martingale'), 'sorosgale': arquivo.get('GERAL', 'sorosgale'), 'niveis': arquivo.get('GERAL', 'niveis'), 'filtro_pais': arquivo.get('GERAL', 'filtro_pais'), 'filtro_top_traders': arquivo.get('GERAL', 'filtro_top_traders'), 'valor_minimo': arquivo.get('GERAL', 'valor_minimo'), 'paridade': arquivo.get('GERAL', 'paridade'), 'valor_entrada': arquivo.get('GERAL', 'valor_entrada'), 'timeframe': arquivo.get('GERAL', 'timeframe')}
+	return {'seguir_ids': arquivo.get('GERAL', 'seguir_ids'),'stop_win': arquivo.get('GERAL', 'stop_win'), 'stop_loss': arquivo.get('GERAL', 'stop_loss'), 'payout': 0, 'banca_inicial': banca(), 'filtro_diferenca_sinal': arquivo.get('GERAL', 'filtro_diferenca_sinal'), 'martingale': arquivo.get('GERAL', 'martingale'), 'sorosgale': arquivo.get('GERAL', 'sorosgale'), 'niveis': arquivo.get('GERAL', 'niveis'), 'filtro_pais': arquivo.get('GERAL', 'filtro_pais'), 'filtro_top_traders': arquivo.get('GERAL', 'filtro_top_traders'), 'valor_minimo': arquivo.get('GERAL', 'valor_minimo'), 'paridade': arquivo.get('GERAL', 'paridade'), 'valor_entrada': arquivo.get('GERAL', 'valor_entrada'), 'timeframe': arquivo.get('GERAL', 'timeframe')}
 
 def martingale(tipo, valor, payout):
 	if tipo == 'simples':
@@ -99,11 +99,9 @@ def entradas(config, entrada, direcao, timeframe):
 		stop_win = False
 
 		if round((banca_att - float(config['banca_inicial'])), 2) <= (abs(float(config['stop_loss'])) * -1.0):
-			print('stop loss = ',round((banca_att - float(config['banca_inicial'])), 2))
 			stop_loss = True
 			
 		if round((banca_att - float(config['banca_inicial'])) + (float(entrada) * float(config['payout'])) + float(entrada), 2) >= abs(float(config['stop_win'])):
-			print('stop win = ',round((banca_att - float(config['banca_inicial'])) + (float(entrada) * float(config['payout'])) + float(entrada), 2))
 			stop_win = True
 		
 		while True:
@@ -141,33 +139,22 @@ def filtro_ranking(config):
 		if int(config['filtro_top_traders']) != 0:
 			for n in ranking['result']['positional']:
 				id = ranking['result']['positional'][n]['user_id']
-				user_id.append(id)
-				
-				'''
-				perfil_info = API.get_user_profile_client(id)
-				if perfil_info['status'] == 'online':
-					op = API.get_users_availability(id)
-					
-					try:			
-						tipo = op['statuses'][0]['selected_instrument_type']
-						par = API.get_name_by_activeId(op['statuses'][0]['selected_asset_id']).replace('/', '')
-						
-						print('\n [',n,'] ',perfil_info['user_name'])		
-						print(tipo)			
-						print(par)
-						
-						
-					except:
-						pass
-				'''
-				
+				user_id.append(id)				
 	except:
 		pass
 		
 	return user_id
 
-
 filtro_top_traders = filtro_ranking(config)
+
+if config['seguir_ids'] != '':
+	if ',' in config['seguir_ids']:
+		x = config['seguir_ids'].split(',')
+		for old in x:
+			filtro_top_traders.append(int(old))
+	else:
+		filtro_top_traders.append(int(config['seguir_ids']))
+
 
 tipo = 'live-deal-digital-option' # live-deal-binary-option-placed
 timeframe = 'PT'+config['timeframe']+'M' # PT5M / PT15M
@@ -185,11 +172,8 @@ while True:
 		ok = True
 		
 		# Correcao de bug em relacao ao retorno de datas errado
-		res = str(timestamp_converter(trades[0]['created_at'] / 1000, 2) - timestamp_converter(time.time(), 2) ).replace(':', '')
-		if 'day' in res:
-			res = str(timestamp_converter(time.time(), 2) - timestamp_converter(trades[0]['created_at'] / 1000, 2)).replace(':', '')
-		ok = True if int(res) <= int(config['filtro_diferenca_sinal']) else False
-	
+		res = round( time.time() - datetime.timestamp( timestamp_converter(trades[0]['created_at'] / 1000, 2) ), 2)
+		ok = True if res <= int(config['filtro_diferenca_sinal']) else False
 		
 		if len(filtro_top_traders) > 0:
 			if trades[0]['user_id'] not in filtro_top_traders:
@@ -198,8 +182,7 @@ while True:
 		if ok:
 			# Dados sinal
 			print(res, end='')
-			print(' [',trades[0]['flag'],']',config['paridade'],'/',trades[0]['amount_enrolled'],'/',trades[0]['instrument_dir'],'/',trades[0]['name'])
-			
+			print(' [',trades[0]['flag'],']',config['paridade'],'/',trades[0]['amount_enrolled'],'/',trades[0]['instrument_dir'],'/',trades[0]['name'],trades[0]['user_id'])
 			
 			# 1 entrada
 			resultado,lucro,stop = entradas(config, config['valor_entrada'], trades[0]['instrument_dir'], int(config['timeframe']))
@@ -260,9 +243,8 @@ while True:
 								perca += perca / 2								
 								break						
 			
-			
+
 		old = trades[0]['user_id']
-
-
+	time.sleep(0.2)
 
 API.unscribe_live_deal(tipo, config['paridade'], timeframe)
